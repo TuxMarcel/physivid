@@ -67,7 +67,7 @@ class TestEngineDeterminism(unittest.TestCase):
         """
         Test that AudioSynthesizer successfully mixes sound into the buffer.
         """
-        synth = AudioSynthesizer("dummy.wav", duration=1.0, sample_rate=1000)
+        synth = AudioSynthesizer("dummy.wav", duration=1.0, seed=42, sample_rate=1000)
         self.assertEqual(sum(synth.buffer), 0.0)
         
         # Synthesize a sound at t=0.5
