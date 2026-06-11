@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# IDEs
+.idea/
+.vscode/
+.DS_Store
+
+# Project specific
+temp_frames/
+output/videos/
+*.mp4
+*.wav
+
+# Misc
+.env
+.pytest_cache/
+.coverage
