@@ -39,7 +39,7 @@ class Utils:
             "-framerate", str(fps),
             "-i", frame_pattern,
             "-i", audio_path,
-            "-c:v", "libopenh264",
+            "-c:v", "h264_nvenc",
             "-pix_fmt", "yuv420p",
             "-vf", f"scale={resolution}", # Force resolution
             "-c:a", "aac",
