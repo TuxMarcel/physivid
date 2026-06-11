@@ -1,9 +1,9 @@
 import os
 import sys
 import random
-from src.cli import parse_args
-from src.utils import Utils
-from src.engine import SimulationEngine
+from src.cli_handler import parse_args
+from src.utils_ffmpeg import Utils
+from src.engine_sim import SimulationEngine
 
 def interactive_menu():
     print("=" * 60)
@@ -11,16 +11,16 @@ def interactive_menu():
     print("=" * 60)
     print("Wähle eine Physik-Welt aus:")
     print("  1. Bälle-Parcours (ball_pit) - Plinko-Pins, Bälle, rotierende Spinner")
-    print("  2. DNA-Lavalampe (lava_dna) - Schwebende und zirkulierende Blasen")
-    print("  3. [Zukünftig] Pendel-Schwingung (pendulum_swing)")
+    print("  2. Lava-Lampe (lava_lamp) - Sanft schwebende Farbblobs")
+    print("  3. [Zukünftig] DNA-Helix (dna_helix)")
     print("  4. [Zukünftig] Domino-Effekt (domino_effect)")
     print("-" * 60)
     
     choice = input("Wähle eine Welt (1-2, Standard 1): ").strip()
     if choice == "2":
-        scene_profile = "lava_dna"
+        scene_profile = "lava_lamp"
     elif choice == "3":
-        print("Pendel-Schwingung ist noch nicht implementiert. Nutze Bälle-Parcours.")
+        print("DNA-Helix ist noch nicht implementiert. Nutze Bälle-Parcours.")
         scene_profile = "ball_pit"
     elif choice == "4":
         print("Domino-Effekt ist noch nicht implementiert. Nutze Bälle-Parcours.")

@@ -2,9 +2,9 @@ import unittest
 import pymunk
 import os
 import shutil
-from src.world_generator import WorldGenerator
-from src.engine import SimulationEngine
-from src.audio_synth import AudioSynthesizer
+from src.engine_world import WorldGenerator
+from src.engine_sim import SimulationEngine
+from src.engine_audio import AudioSynthesizer
 
 class TestEngineDeterminism(unittest.TestCase):
     def test_world_generator_determinism(self):
@@ -34,7 +34,7 @@ class TestEngineDeterminism(unittest.TestCase):
         Verify that running the simulation twice with the same seed results in the exact same state.
         """
         seed = 99
-        profile = "lava_dna"
+        profile = "lava_lamp"
         temp_dir1 = "temp_test_1"
         temp_dir2 = "temp_test_2"
         

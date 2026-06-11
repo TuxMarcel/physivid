@@ -1,55 +1,51 @@
-# Command-Line Interface (CLI) Specification
+# Command-Line Interface Specification
 
-This document details the command-line arguments that the Python CLI tool will accept. The `argparse` module is recommended for handling these arguments.
+## 1. Implementation (`cli_handler.py`)
 
-## 1. Expected CLI Arguments
+Uses Python `argparse`. Two entry modes:
 
-The tool should be invoked with the following arguments:
-
--   **`--seed`**
-    -   **Type:** Integer
-    -   **Description:** A unique integer value that initializes the random number generator, ensuring deterministic world generation. The same seed will always produce an identical simulation and video output.
-    -   **Example:** `--seed 12345`
-
--   **`--duration`**
-    -   **Type:** Float
-    -   **Description:** The total length of the output video in seconds.
-    -   **Example:** `--duration 10.5` (for a 10.5-second video)
-
--   **`--fps`**
-    -   **Type:** Integer
-    -   **Description:** The desired frames per second (FPS) for the output video. This also dictates the simulation step rate for visual rendering.
-    -   **Example:** `--fps 60`
-
--   **`--resolution`**
-    -   **Type:** String
-    -   **Description:** The resolution of the output video frames, specified as "WIDTHxHEIGHT".
-    -   **Example:** `--resolution 1920x1080`
-
--   **`--output_name`**
-    -   **Type:** String
-    -   **Description:** The base name for the generated MP4 video file (e.g., if `my_video` is provided, the output could be `my_video.mp4`).
-    -   **Example:** `--output_name "collision_simulation"`
-
--   **`--scene_profile`**
-    -   **Type:** String
-    -   **Description:** A identifier string that selects a specific pre-defined simulation scenario, world configuration, or set of initial physics parameters. This allows for varied video content using different "scenes".
-    -   **Example:** `--scene_profile "bouncing_balls"` or `--scene_profile "domino_effect"`
-
-## 2. Example CLI Invocation
-
-A typical invocation of the CLI tool would look like this:
-
+### CLI Mode
 ```bash
-python main.py 
-    --seed 789 
-    --duration 15.0 
-    --fps 30 
-    --resolution 1280x720 
-    --output_name "my_physics_clip" 
-    --scene_profile "pendulum_swing"
+python main.py \
+    --seed 789 \
+    --duration 15.0 \
+    --fps 30 \
+    --resolution 1280x720 \
+    --output_name "my_clip" \
+    --scene_profile lava_lamp
 ```
 
-## 3. Error Handling
+### Interactive Mode
+```bash
+python main.py   # no args → interactive menu
+```
+Or via wrapper:
+```bash
+~/bin/physivid --seed 42 --scene_profile ball_pit --duration 60
+```
 
-The CLI parser should include basic error handling for invalid argument types or missing required arguments. Sensible default values should be considered where appropriate for optional arguments.
+## 2. Arguments
+
+| Argument | Type | Default | Choices | Description |
+|---|---|---|---|---|
+| `--seed` | int | random | any int | Determinism seed |
+| `--duration` | float | 60.0 | > 0 | Video length (seconds) |
+| `--fps` | int | 60 | > 0 | Frames per second |
+| `--resolution` | str | "1080x1920" | "WxH" format | Output resolution |
+| `--output_name` | str | "output" | any string | Base MP4 filename |
+| `--scene_profile` | str | "ball_pit" | ball_pit, lava_lamp | World to simulate |
+
+## 3. Scene Profiles Available
+
+| Profile | Description | Interactive Menu |
+|---|---|---|
+| `ball_pit` | Bälle-Parcours (Plinko) | Option 1 |
+| `lava_lamp` | Lava-Lampe | Option 2 |
+| (future) `dna_helix` | DNA-Doppelhelix | Option 3 (not implemented) |
+| (future) `domino_effect` | Domino-Effekt | Option 4 (not implemented) |
+
+## 4. Output File Naming
+
+- If `--output_name` is "output" (default): `output/{name}_{seed}_{profile}.mp4`
+- If custom name: `output/{name}_{seed}.mp4`
+- Example: `output/videos/my_clip_789_lava_lamp.mp4`

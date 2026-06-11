@@ -1,39 +1,45 @@
 # Integrated Audio Synthesis and Synchronization
 
-This document outlines the approach for generating and synchronizing audio with the physics simulation. Sound is an integral part of the final video, directly tied to simulation events.
+## 1. Implementation (`engine_audio.py`)
 
-## 1. Sound Generation Strategy
+Pure Python WAV synthesis — no external audio libraries.
 
-The initial implementation should focus on simple, programmatic sound generation directly from Python code.
+### SoundProfile (`SoundProfile` class)
 
--   **Types of Sounds:**
-    -   **Collision Sounds:** Generate short, percussive sounds upon physics body collisions. The intensity (volume, pitch) of the sound could correlate with the force or relative velocity of the collision.
-    -   **Movement Sounds:** Optionally, subtle sounds could be generated for objects moving rapidly or consistently (e.g., a "whoosh" sound for fast objects, or a low hum for rolling objects).
-    -   **Event-Based Tones:** Sounds triggered by `EventScheduler` for specific, pre-defined simulation events.
--   **Programmatic Generation:**
-    -   Utilize Python's standard libraries or a minimal external library (e.g., `scipy.io.wavfile` or `sounddevice` if extremely lightweight) to generate raw audio samples (e.g., sine waves, square waves, basic envelopes). Avoid complex, heavy audio synthesis frameworks initially.
-    -   Parameters for sound characteristics (frequency, amplitude, duration, attack/decay) must be derived deterministically from simulation state or event properties.
-    -   The generation should output raw PCM audio data.
+Seed-driven acoustic material model. Each seed produces a consistent material type:
 
-## 2. Synchronization with Visuals
+| Material | Sound Character | Frequency Range | Decay |
+|---|---|---|---|
+| Plastic/Ping-Pong | Bright, short click | 1800–4500 Hz | Fast (18–30) |
+| Wood/Xylophone | Warm mid thud | 180–900 Hz | Medium (8–16) |
+| Ceramic/Stone | Medium, slightly inharmonic | 400–1800 Hz | Medium (10–22) |
 
-Accurate synchronization between audio and visuals is paramount for a cohesive audiovisual experience.
+Properties derived from seed: body frequency min/max, decay rate, noise level, duration, pitch drop, volume scale, inharmonicity.
 
--   **Frame-Accurate Generation:** Audio should be generated in small chunks that correspond precisely to the time duration of each visual frame.
--   **Event Triggering:**
-    -   The `EventScheduler` or the `SimulationEngine` itself should detect physics events (like collisions) and trigger the audio synthesis component to generate the appropriate sound data for that specific time slice.
-    -   Ensure that the time at which an audio event is triggered in the simulation exactly matches the visual event it accompanies.
--   **Deterministic Audio:** Just like the visuals, the audio generated must be deterministic based on the `seed`. The same simulation run with the same seed should always produce the exact same audio output.
+### AudioSynthesizer
 
-## 3. Output Format for Audio
+- Buffer: float array of `duration * sample_rate` (default 44.1 kHz mono)
+- `play_collision_sound(t, impulse)`: generate impact at time `t` with volume + pitch mapped from impulse
+  - Impulse < 6.0 → silent (filters out micro-collisions)
+  - Impulse range 6–900 → maps to volume 0.02–1.0
+  - Material affects pitch: plastic gets brighter with force, wood/ceramic get deeper
+- Sound structure: noise attack transient (click) + resonant body (sine with inharmonic overtone) + pitch drop over duration
+- `write_to_file()`: soft-clamp via `tanh()`, save as 16-bit PCM WAV
 
--   **Temporary Audio File:** The generated audio samples for the entire simulation duration should be concatenated and saved as a single, temporary **WAV file**. This format is uncompressed and widely compatible, making it suitable for FFmpeg.
--   **File Naming:** The temporary WAV file should have a clear, unique name, possibly incorporating the `output_name` and `seed` to avoid conflicts during concurrent runs.
--   **Sampling Rate/Bit Depth:** A common sampling rate (e.g., 44.1 kHz or 48 kHz) and bit depth (e.g., 16-bit PCM) should be chosen and consistently applied throughout the audio generation process.
--   **Channels:** Mono or Stereo, depending on complexity, but start with mono for simplicity.
+## 2. Synchronization
 
-## 4. Considerations
+- `play_collision_sound(self.current_time, impulse)` called from `SimulationEngine._on_collision()` during each frame's physics step
+- `current_time = frame * dt` — frame-accurate timing
+- Multiple simultaneous sounds mix additively in the buffer
 
--   **Performance:** Generating audio programmatically can be CPU-intensive. Optimize the generation process to keep up with the real-time simulation and rendering pace.
--   **Mixing:** If multiple sounds occur simultaneously, their audio samples will need to be mixed together (summed) correctly, taking care to avoid clipping.
--   **Volume Control:** Implement basic volume control for different types of sounds.
+## 3. Output
+
+- Temporary file: `{temp_dir}/audio.wav`
+- 44.1 kHz, 16-bit mono PCM WAV
+- Muxed into final MP4 by FFmpeg (converted to AAC audio stream)
+
+## 4. Known Limitations
+
+- Only collision sounds are implemented (no movement/whoosh or ambient tones)
+- No volume mixing control per sound type (all sounds summed at same level)
+- Deterministic noise RNG seeded separately from simulation seed

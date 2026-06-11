@@ -1,72 +1,53 @@
-# Video Export and Muxing with FFmpeg
+# Video Export with FFmpeg
 
-This document outlines the process for using FFmpeg to combine the rendered image frames and generated audio into a final MP4 video file. It also covers the management of temporary files.
+## 1. Implementation (`utils_ffmpeg.py`)
 
-## 1. FFmpeg Installation and Availability
+The `Utils` class handles temporary files and calls FFmpeg via `subprocess.run()`.
 
--   **Prerequisite:** FFmpeg must be installed and accessible from the system's command line. The Python script will assume FFmpeg is in the system's PATH.
--   **Verification:** The script should ideally include a check for FFmpeg's availability (e.g., `ffmpeg -version`) and provide an informative error if it's not found.
+### FFmpeg Command (single pass — video + audio together)
 
-## 2. Encoding Image Sequence to Video
+```bash
+ffmpeg \
+    -framerate <fps> \
+    -i temp_frames/frame_%05d.png \
+    -i temp_frames/audio.wav \
+    -c:v h264_nvenc \
+    -pix_fmt yuv420p \
+    -vf "scale=<resolution>" \
+    -c:a aac \
+    -strict experimental \
+    -y \
+    output/videos/<filename>.mp4
+```
 
-Once all individual frames (e.g., PNG images) have been rendered to a temporary directory, FFmpeg will be used to encode them into a video stream.
+**Notes:**
+- Uses **NVENC** (GPU hardware encoding via `h264_nvenc`). Falls back to software encoding if unavailable.
+- `-vf scale` forces output resolution (PNGs rendered at requested resolution, but scale ensures consistency)
+- AAC audio stream from WAV input
+- `-y` overwrites existing output
 
--   **Input:** The sequence of PNG image files (e.g., `frame_00001.png`, `frame_00002.png`, etc.) from the temporary directory.
--   **Command Example:**
+## 2. Prerequisites
 
-    ```bash
-    ffmpeg 
-        -framerate <fps> 
-        -i <path_to_temp_frames>/frame_%05d.png 
-        -c:v libx264 
-        -pix_fmt yuv420p 
-        -vf "scale=<width>:<height>" 
-        <path_to_temp_video>/<output_name>_video_only.mp4
-    ```
+- FFmpeg must be in PATH (no availability check implemented — add if needed)
+- Tested with FFmpeg 8.1.1
 
-    -   **`<fps>`:** The frames per second (`--fps` CLI argument).
-    -   **`<path_to_temp_frames>`:** The path to the temporary directory where frame images are stored.
-    -   **`%05d`:** Specifies a 5-digit zero-padded integer for the frame number (adjust `05` based on the maximum number of frames).
-    -   **`-c:v libx264`:** Specifies the H.264 video codec, a widely compatible and efficient codec.
-    -   **`-pix_fmt yuv420p`:** Sets the pixel format, ensuring broad compatibility with video players.
-    -   **`-vf "scale=<width>:<height>"`:** Scales the video to the desired resolution (`--resolution` CLI argument). This is important if the rendering surface resolution isn't exactly what's passed to FFmpeg, or for explicit resizing.
-    -   **`<path_to_temp_video>/<output_name>_video_only.mp4`:** The output path for the video stream *without* audio, stored in a temporary location.
+## 3. File Management
 
-## 3. Muxing Video and Audio Streams
+### Temporary Files (`temp_frames/`)
 
-After the video stream is created and the audio WAV file is generated, FFmpeg will combine them into the final MP4.
+| File | Format | Contents |
+|---|---|---|
+| `frame_%05d.png` | PNG sequence | One per frame (zero-padded to 5 digits) |
+| `audio.wav` | 16-bit PCM WAV | Mono, 44.1 kHz |
 
--   **Inputs:** The temporary video-only MP4 file and the temporary WAV audio file.
--   **Command Example:**
+Cleanup via `Utils.cleanup()` removes the entire `temp_frames/` directory.
 
-    ```bash
-    ffmpeg 
-        -i <path_to_temp_video>/<output_name>_video_only.mp4 
-        -i <path_to_temp_audio>/<output_name>_audio_only.wav 
-        -c:v copy 
-        -c:a aac 
-        -map 0:v:0 
-        -map 1:a:0 
-        <path_to_final_output>/<output_name>.mp4
-    ```
+### Output Location
 
-    -   **`-i`:** Specifies input files (video stream first, then audio stream).
-    -   **`-c:v copy`:** Copies the video stream directly without re-encoding, saving time and preserving quality.
-    -   **`-c:a aac`:** Re-encodes the audio to AAC, a standard audio codec for MP4.
-    -   **`-map 0:v:0`:** Maps the first video stream from the first input (`-i <video_file>`).
-    -   **`-map 1:a:0`:** Maps the first audio stream from the second input (`-i <audio_file>`).
-    -   **`<path_to_final_output>/<output_name>.mp4`:** The final output path for the MP4 video, located in the designated shared output folder.
+Default: `output/videos/` (created automatically if it doesn't exist).
 
-## 4. Temporary Files Cleanup
+## 4. Known Issues
 
-Upon successful creation of the final MP4 video, all intermediate temporary files must be cleaned up to free disk space.
-
--   This includes:
-    -   All individual frame images (e.g., `frame_00001.png`, `frame_00002.png`, etc.).
-    -   The temporary video-only MP4 file (e.g., `<output_name>_video_only.mp4`).
-    -   The temporary WAV audio file (e.g., `<output_name>_audio_only.wav`).
--   The temporary directories themselves should also be removed if they become empty.
-
-## 5. Final Output Location
-
-All completed `.mp4` video files generated by the tool should be placed into a single, shared output directory. This directory path should ideally be configurable, or default to a standard location like `output/videos/` relative to the project root.
+- No FFmpeg existence check before running (will crash with cryptic error if missing)
+- If `h264_nvenc` is unavailable, change to `libx264` in `utils_ffmpeg.py`
+- Single-pass approach (encode happens after all frames rendered) — no intermediate video-only file

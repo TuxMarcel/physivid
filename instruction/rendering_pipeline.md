@@ -1,34 +1,57 @@
 # Headless Rendering Pipeline
 
-This document details the process for generating visual frames from the physics simulation in a headless (off-screen) manner, preparing them for final video encoding.
+## 1. Renderer (`engine_render.py`)
 
-## 1. Renderer Choice and Configuration
+Uses Pygame in headless mode (`SDL_VIDEODRIVER=dummy`).
 
--   **Recommended Renderer:** `Pygame` is the recommended library for rendering due to its capabilities for off-screen surface manipulation and deterministic drawing operations. Alternatives must also support headless rendering.
--   **Headless Operation:** The renderer must be configured to operate without displaying any graphical windows. For Pygame, this typically involves setting the `SDL_VIDEODRIVER` environment variable to `dummy` or creating a `NOFRAME` display surface.
--   **Surface Initialization:** Initialize a Pygame display surface (or equivalent in another library) with the `--resolution` specified in the CLI arguments (e.g., "1920x1080"). This surface will serve as the canvas for drawing each frame.
+### Initialization:
+```python
+os.environ['SDL_VIDEODRIVER'] = 'dummy'
+pygame.init()
+self.screen = pygame.Surface((width, height))
+```
 
-## 2. Frame Generation Process
+### Per-Frame Rendering:
 
-For each simulation step (corresponding to a video frame):
+1. **Clear:** Fill surface with dark background `(16, 20, 28)`
+2. **Grid:** Draw subtle blue-gray grid lines (every 120px)
+3. **Draw shapes** (iterates `space.shapes`):
+   - **Circles:** Filled circle + optional highlight (3D effect) + trail circles
+   - **Segments:** Thick line with rounded caps
+4. **Save:** `pygame.image.save(screen, "frame_%05d.png")`
 
-1.  **Clear Canvas:** The rendering surface should be cleared (e.g., filled with a background color) at the beginning of each frame's rendering cycle.
-2.  **Draw Scene Elements:** Based on the current state of physics objects obtained from the `SimulationEngine` (positions, rotations, types, etc.), draw corresponding visual elements onto the off-screen surface.
-    -   **Visual Mapping:** Define a clear mapping between Pymunk shapes (e.g., `Circle`, `Segment`, `Poly`) and their graphical representations (e.g., Pygame `circle()`, `line()`, `polygon()`).
-    -   **Colors and Properties:** Colors and other visual properties (e.g., line thickness) can be determined based on object types, their state, or other simulation parameters, ensuring determinism.
-3.  **Capture Frame:** After all elements for the current frame have been drawn, the entire off-screen surface is captured.
+## 2. Shape-to-Visual Mapping
 
-## 3. Output Format for Frames
+| Pymunk Shape | Pygame Drawing | Notes |
+|---|---|---|
+| `Circle` (dynamic) | Filled circle + highlight offset to top-left | 3D sphere look |
+| `Circle` (static) | Outline circle (2px stroke, blue-gray) | Blueprint style |
+| `Segment` | Thick line + rounded caps | Color from shape.color |
 
--   **Image Files:** Each captured frame should be saved as an individual image file. **PNG** format is highly recommended due to its lossless compression, which is crucial for maintaining visual quality before video encoding.
--   **Naming Convention:** Images should be named with a consistent, zero-padded sequential number for easy processing by FFmpeg.
-    -   **Example:** `frame_00001.png`, `frame_00002.png`, ..., `frame_N.png`
--   **Temporary Directory:** All generated frame images must be stored in a dedicated temporary directory. This directory will be managed by the application for cleanup after video export.
+## 3. Color System
 
-## 4. Visual Elements Mapping (Example)
+Color is determined by `_get_shape_color(shape)`:
 
--   **Pymunk Circle:** Render as a filled circle in Pygame.
--   **Pymunk Segment:** Render as a line in Pygame.
--   **Pymunk Poly:** Render as a filled polygon in Pygame.
--   **Dynamic Coloring:** Consider assigning colors to objects based on their `body.id` (if deterministic) or `body.mass` or `body.velocity` magnitude to add visual interest, but ensure this logic is also deterministic.
--   **Coordinate Systems:** Pay attention to the transformation between Pymunk's coordinate system (typically y-up) and Pygame's (typically y-down, with origin at top-left). Necessary transformations (flipping y-axis, offsetting origin) must be applied consistently.
+1. If `body.temp` exists (lava blobs) → smooth gradient based on temperature (0.0=purple, 0.5=orange, 1.0=yellow-white)
+2. If `body.warm` exists (legacy) → binary warm/cool gradient based on y-position
+3. Otherwise → `shape.color` (set by scene during setup)
+
+## 4. Trail System
+
+Dynamic bodies render motion trails:
+- Configurable via `body.trail_len` attribute (default `max_trail_len = 10`)
+- Each frame appends position; old positions fade out with reduced opacity and size
+- Background blending for smooth fade effect
+
+## 5. Coordinate System
+
+- **Pymunk:** y-up, origin at center (range: ~ -520×-920 to 520×920)
+- **Pygame:** y-down, origin at top-left
+- **Transform in `_to_pygame()`:** `(x + w/2, h/2 - y)`
+
+## 6. Performance Notes
+
+- PNG save via `pygame.image.save()` is the main bottleneck
+- At 1080×1920, 60 FPS: expect ~50-200ms per frame save
+- Reducing resolution or FPS gives linear speedup
+- Trail rendering adds overhead per dynamic shape (set `trail_len` lower for performance)
