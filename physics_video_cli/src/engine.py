@@ -9,7 +9,7 @@ class SimulationEngine:
         self.wg = WorldGenerator(seed, profile)
         self.space = self.wg.generate()
         self.renderer = Renderer(resolution)
-        self.audio = AudioSynthesizer(os.path.join(output_dir, "audio.wav"), duration)
+        self.audio = AudioSynthesizer(os.path.join(output_dir, "audio.wav"), duration, seed)
         self.output_dir = output_dir
         self.current_time = 0.0
         
