@@ -1,45 +1,27 @@
-# Integrated Audio Synthesis and Synchronization
+# Die Audio-Engine
 
-## 1. Implementation (`engine_audio.py`)
+Die Audio-Engine ist eine generische Synthese-Einheit, die keine szenespezifische Logik enthält.
 
-Pure Python WAV synthesis — no external audio libraries.
+## 1. Funktionsweise (`src/engines/audio.py`)
 
-### SoundProfile (`SoundProfile` class)
+- Arbeitet mit einem PCM-WAV-Buffer (44.1 kHz).
+- Bietet die Methode `play_sound(t, params)`, die rein datengesteuert arbeitet.
+- Nutzt `math.tanh` für Soft-Clipping und Schutz vor Verzerrung.
 
-Seed-driven acoustic material model. Each seed produces a consistent material type:
+## 2. Audio-Profile (`src/audio_profiles/`)
 
-| Material | Sound Character | Frequency Range | Decay |
-|---|---|---|---|
-| Plastic/Ping-Pong | Bright, short click | 1800–4500 Hz | Fast (18–30) |
-| Wood/Xylophone | Warm mid thud | 180–900 Hz | Medium (8–16) |
-| Ceramic/Stone | Medium, slightly inharmonic | 400–1800 Hz | Medium (10–22) |
+Jedes Profil berechnet aus einem physikalischen Impuls die Synthese-Parameter:
 
-Properties derived from seed: body frequency min/max, decay rate, noise level, duration, pitch drop, volume scale, inharmonicity.
+| Profil | Sound-Charakter | Einsatzgebiet |
+|---|---|---|
+| `ImpactProfile` | Klickend, metallisch/hölzern | Ball Pit, Kollisionen |
+| `LiquidProfile` | Blubbernd, tieffrequent | Lava Lamp, DNA |
 
-### AudioSynthesizer
+## 3. Parameter-Mapping
 
-- Buffer: float array of `duration * sample_rate` (default 44.1 kHz mono)
-- `play_collision_sound(t, impulse)`: generate impact at time `t` with volume + pitch mapped from impulse
-  - Impulse < 6.0 → silent (filters out micro-collisions)
-  - Impulse range 6–900 → maps to volume 0.02–1.0
-  - Material affects pitch: plastic gets brighter with force, wood/ceramic get deeper
-- Sound structure: noise attack transient (click) + resonant body (sine with inharmonic overtone) + pitch drop over duration
-- `write_to_file()`: soft-clamp via `tanh()`, save as 16-bit PCM WAV
-
-## 2. Synchronization
-
-- `play_collision_sound(self.current_time, impulse)` called from `SimulationEngine._on_collision()` during each frame's physics step
-- `current_time = frame * dt` — frame-accurate timing
-- Multiple simultaneous sounds mix additively in the buffer
-
-## 3. Output
-
-- Temporary file: `{temp_dir}/audio.wav`
-- 44.1 kHz, 16-bit mono PCM WAV
-- Muxed into final MP4 by FFmpeg (converted to AAC audio stream)
-
-## 4. Known Limitations
-
-- Only collision sounds are implemented (no movement/whoosh or ambient tones)
-- No volume mixing control per sound type (all sounds summed at same level)
-- Deterministic noise RNG seeded separately from simulation seed
+Eine Szene liefert folgende Parameter an die Engine:
+- `freq`: Basis-Frequenz in Hz.
+- `duration`: Länge in Sekunden.
+- `noise_level`: Anteil des initialen Klick-Geräusches.
+- `pitch_drop`: Wie stark die Frequenz über die Zeit abfällt.
+- `inharmonicity`: Multiplikator für unharmonische Obertöne.

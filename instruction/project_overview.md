@@ -1,40 +1,26 @@
-# Project Overview: Deterministic Audiovisual Physics CLI Tool
+# Modulare Physik-Video-Pipeline (Physivid)
 
-## 1. Project Goal
+Diese Dokumentation beschreibt die Architektur der hochgradig modularen Video-Generierungs-Pipeline.
 
-A Python CLI tool that generates deterministic audiovisual physics videos in a headless rendering pipeline. A user-provided seed guarantees a unique yet reproducible world, with synchronized visuals and sound rendered into MP4 video.
+## 1. Architektur-Prinzipien
 
-## 2. Current Status (June 2026)
+- **Strikte Entkopplung:** Kern-Engines wissen nichts über den Inhalt der Szenen.
+- **Klassen-basierte Struktur:** Jede Komponente (Engine, Szene, Entity, Audio-Profil) ist eine eigenständige Klasse.
+- **Scene Ownership:** Szenen besitzen ihre eigene Physik (Gravity), Kollisions-Logik und Sound-Charakteristik.
+- **Determinisierung:** Alles wird über einen einzigen `seed` gesteuert.
 
-The project is functional with two complete scenes:
+## 2. Ordnerstruktur
 
-| Scene | Status | Description |
-|---|---|---|
-| `ball_pit` | ✅ Production-ready | Plinko-style ball drop with pegs, spinners, bumpers (5 layouts) |
-| `lava_lamp` | ✅ Production-ready | Ampoule-shaped vessel, organic blobs with merge/split + temp-driven convection |
-| `dna_helix` | ❌ Not started | Planned double-helix visualization |
-| `domino_effect` | ❌ Not started | Planned domino chain reaction |
+- `src/engines/`: Generische Kern-Engines (`simulation.py`, `audio.py`, `rendering.py`).
+- `src/scenes/`: Orchestrierung der Welten (`base.py`, `ball_pit.py`, etc.).
+- `src/entities/`: Physische Objekte als Klassen (`ball_pit_entities.py`, `lava_entities.py`).
+- `src/audio_profiles/`: Sound-Modelle (`impact_profile.py`, `liquid_profile.py`).
 
-## 3. Key Features (all implemented)
+## 3. Workflow der Pipeline
 
-- **Seed-based determinism:** Same seed → identical video every time
-- **Modular architecture:** Engine, worlds (scenes), entities (reusable components)
-- **Headless rendering:** Pygame off-screen surface, no GUI
-- **MP4 export:** FFmpeg muxes PNG frames + WAV audio
-- **Integrated audio:** Collision-based synthesized sound (material profiles: plastic, wood, ceramic)
-- **Shared output folder:** `output/videos/`
-
-## 4. User Interaction
-
-Two modes:
-- **CLI args:** `python main.py --seed 42 --scene_profile lava_lamp --duration 30 --fps 60`
-- **Interactive menu:** Run `python main.py` without args → prompts for world, seed, duration
-
-Wrapper script: `~/bin/physivid` (calls main.py with venv Python, passes all args through).
-
-## 5. Known Limitations
-
-- `EventScheduler` (from original architecture spec) was never implemented — scene updates handle per-frame logic directly
-- No metadata JSON output per render
-- No FFmpeg availability check (assumes `h264_nvenc` in PATH)
-- PNG save via `pygame.image.save()` is the main performance bottleneck
+1. **`main.py`** erfasst User-Input und instanziiert die Engines.
+2. **`WorldGenerator`** erstellt dynamisch die gewünschte Szene.
+3. **`SimulationEngine`** taktet die Simulation und delegiert Kollisionen an die Szene.
+4. **`AudioEngine`** synthetisiert Sounds basierend auf den Parametern des Szenen-Audio-Profils.
+5. **`RenderingEngine`** zeichnet den physischen Zustand in PNG-Frames.
+6. **`FFmpeg`** fügt Frames und Audio zum finalen MP4 zusammen.

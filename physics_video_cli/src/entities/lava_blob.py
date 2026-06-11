@@ -11,19 +11,25 @@ def create_blob(space, rng, x=None, y=None, temp=None, radius=None, phase=None, 
 
     body = pymunk.Body(mass, inertia, body_type=pymunk.Body.DYNAMIC)
     body.position = (
-        x if x is not None else rng.randint(-100, 100),
-        y if y is not None else rng.randint(-600, 600),
+        x if x is not None else rng.randint(-120, 120),
+        y if y is not None else rng.randint(-700, 700),
     )
-    body.temp = temp if temp is not None else rng.uniform(0.3, 0.7)
+    body.temp = temp if temp is not None else rng.uniform(0.2, 0.8)
     body.lateral_phase = phase if phase is not None else rng.uniform(0, 2 * math.pi)
-    body.lateral_speed = speed if speed is not None else rng.uniform(0.3, 0.8)
-    body.lateral_amp = amp if amp is not None else rng.uniform(8, 25)
+    body.lateral_speed = speed if speed is not None else rng.uniform(0.2, 1.0)
+    body.lateral_amp = amp if amp is not None else rng.uniform(5, 30)
+    
+    # Store dynamic physics parameters on the body to avoid hardcoding in the update function
+    body.buoyancy_force = rng.uniform(280.0, 420.0)
+    body.heat_rate = rng.uniform(0.5, 2.0)
+    body.cool_rate = rng.uniform(0.4, 1.8)
+    
     body.trail_len = 5
     body.velocity_func = _lava_velocity_update
 
     shape = pymunk.Circle(body, radius)
-    shape.elasticity = 0.02
-    shape.friction = 0.02
+    shape.elasticity = 0.05
+    shape.friction = 0.05
     shape.is_dynamic = True
     shape.filter = BLOB_FILTER
 
@@ -33,31 +39,48 @@ def create_blob(space, rng, x=None, y=None, temp=None, radius=None, phase=None, 
 
 def _lava_velocity_update(body, gravity, damping, dt):
     y = body.position.y
+    
+    # Dynamic convection zones (relative to a ~1600px tall vessel)
+    bottom_threshold = -300
+    top_threshold = 300
+    
+    heat_rate = getattr(body, "heat_rate", 1.0)
+    cool_rate = getattr(body, "cool_rate", 1.0)
 
-    if y < -200:
+    if y < bottom_threshold:
+        # Heating up at the bottom
         target = 1.0
-        rate = 1.5
-    elif y > 200:
+        rate = heat_rate
+    elif y > top_threshold:
+        # Cooling down at the top
         target = 0.0
-        rate = 1.5
+        rate = cool_rate
     else:
-        t = (y + 200) / 400.0
+        # Gradient zone
+        t = (y - bottom_threshold) / (top_threshold - bottom_threshold)
         target = 1.0 - t
-        rate = 0.6
+        rate = (heat_rate + cool_rate) / 2.0
 
     body.temp += (target - body.temp) * rate * dt
     body.temp = max(0.0, min(1.0, body.temp))
 
-    buoyancy = body.temp * 320.0
+    # Apply buoyancy based on temperature
+    buoyancy_force = getattr(body, "buoyancy_force", 320.0)
+    # The force is relative to the scene's gravity (which is negative)
+    buoyancy = body.temp * buoyancy_force
     body.velocity = (body.velocity.x, body.velocity.y + buoyancy * dt)
 
-    if body.velocity.y > 120:
-        body.velocity = (body.velocity.x, 120)
-    if body.velocity.y < -80:
-        body.velocity = (body.velocity.x, -80)
+    # Speed limits for "oozy" feel
+    max_up = 150
+    max_down = -100
+    if body.velocity.y > max_up:
+        body.velocity = (body.velocity.x, max_up)
+    if body.velocity.y < max_down:
+        body.velocity = (body.velocity.x, max_down)
 
+    # Lateral drift (wobble)
     body.lateral_phase += body.lateral_speed * dt
-    amp = body.lateral_amp * (0.3 + 0.7 * body.temp)
+    amp = body.lateral_amp * (0.2 + 0.8 * body.temp)
     drift_x = math.sin(body.lateral_phase) * amp * dt
     body.velocity = (body.velocity.x + drift_x, body.velocity.y)
 

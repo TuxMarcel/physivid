@@ -3,97 +3,73 @@ import sys
 import random
 from src.cli_handler import parse_args
 from src.utils_ffmpeg import Utils
-from src.engine_sim import SimulationEngine
+from src.engine_world import WorldGenerator
+from src.engines.simulation import SimulationEngine
+from src.engines.audio import AudioEngine
+from src.engines.rendering import RenderingEngine
 
 def interactive_menu():
     print("=" * 60)
     print("       AUDIOVISUELLER PHYSIK-SIMULATOR (CLI)       ")
     print("=" * 60)
     print("Wähle eine Physik-Welt aus:")
-    print("  1. Bälle-Parcours (ball_pit) - Plinko-Pins, Bälle, rotierende Spinner")
-    print("  2. Lava-Lampe (lava_lamp) - Sanft schwebende Farbblobs")
-    print("  3. [Zukünftig] DNA-Helix (dna_helix)")
-    print("  4. [Zukünftig] Domino-Effekt (domino_effect)")
+    print("  1. Bälle-Parcours (ball_pit)")
+    print("  2. Lava-Lampe (lava_lamp)")
+    print("  3. DNA-Helix (dna_helix)")
     print("-" * 60)
     
-    choice = input("Wähle eine Welt (1-2, Standard 1): ").strip()
-    if choice == "2":
-        scene_profile = "lava_lamp"
-    elif choice == "3":
-        print("DNA-Helix ist noch nicht implementiert. Nutze Bälle-Parcours.")
-        scene_profile = "ball_pit"
-    elif choice == "4":
-        print("Domino-Effekt ist noch nicht implementiert. Nutze Bälle-Parcours.")
-        scene_profile = "ball_pit"
-    else:
-        scene_profile = "ball_pit"
+    choice = input("Wähle eine Welt (1-3): ").strip()
+    mapping = {"1": "ball_pit", "2": "lava_lamp", "3": "dna_helix"}
+    scene_profile = mapping.get(choice, "ball_pit")
         
-    print(f"\nAusgewählte Welt: {scene_profile}")
+    seed = input("Seed (Enter für Zufall): ").strip()
+    seed = int(seed) if seed else random.randint(1, 999999)
+        
+    duration = input("Dauer in s (Standard 60.0): ").strip()
+    duration = float(duration) if duration else 60.0
     
-    seed_input = input("Seed eingeben (optional, Enter für zufälligen Seed): ").strip()
-    if seed_input:
-        try:
-            seed = int(seed_input)
-        except ValueError:
-            print("Ungültiger Seed. Ein zufälliger Seed wird generiert.")
-            seed = random.randint(1, 999999)
-    else:
-        seed = random.randint(1, 999999)
-        
-    duration_input = input("Videodauer in Sekunden (Standard 60.0): ").strip()
-    try:
-        duration = float(duration_input) if duration_input else 60.0
-    except ValueError:
-        print("Ungültige Dauer. Standard von 60.0 Sekunden wird verwendet.")
-        duration = 60.0
-        
-    # Standardwerte für FPS und Auflösung
-    fps = 60
-    resolution = "1080x1920"
-    output_name = "output"
-    
-    return seed, scene_profile, duration, fps, resolution, output_name
+    return seed, scene_profile, duration, 60, "1080x1920", "output"
 
 def main():
-    # If terminal arguments are provided, use argparse, else show the interactive menu
     if len(sys.argv) > 1:
         args = parse_args()
-        seed = args.seed
-        if seed is None:
-            seed = random.randint(1, 999999)
-        scene_profile = args.scene_profile
-        duration = args.duration
-        fps = args.fps
-        resolution = args.resolution
-        output_name = args.output_name
+        seed, scene_profile, duration = args.seed or random.randint(1, 999999), args.scene_profile, args.duration
+        fps, resolution, output_name = args.fps, args.resolution, args.output_name
     else:
         seed, scene_profile, duration, fps, resolution, output_name = interactive_menu()
-        
-    print("\n" + "=" * 60)
-    print(f"Starte Simulation:")
-    print(f"  - Welt:       {scene_profile}")
-    print(f"  - Seed:       {seed}")
-    print(f"  - Dauer:      {duration}s")
-    print(f"  - FPS:        {fps}")
-    print(f"  - Auflösung:  {resolution}")
-    print("=" * 60 + "\n")
     
-    # Initialize utilities
-    temp_dir = "temp_frames"
+    temp_dir = os.path.abspath("temp_frames")
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
+    
+    # 1. World & Scene Factory
+    wg = WorldGenerator(seed, scene_profile)
+    scene = wg.generate()
+    
+    # 2. Engines Initialisierung
+    audio_file = os.path.join(temp_dir, "audio.wav")
+    audio_engine = AudioEngine(audio_file, duration)
+    rendering_engine = RenderingEngine(resolution)
+    
+    # 3. Simulation Runner
+    sim_engine = SimulationEngine(scene, audio_engine, rendering_engine)
+    
     utils = Utils(temp_dir=temp_dir)
     
     try:
-        # Run Simulation
-        engine = SimulationEngine(seed, scene_profile, resolution, temp_dir, duration)
-        engine.run(duration, fps)
+        print(f"Starte Generierung: {scene_profile} (Seed: {seed})")
+        sim_engine.run(duration, fps, temp_dir)
         
-        # Assemble Video
-        output_filename = f"{output_name}_{seed}_{scene_profile}.mp4" if output_name == "output" else f"{output_name}_{seed}.mp4"
-        output_file = os.path.join("output", "videos", output_filename)
-        utils.create_video(output_file, fps, resolution)
-        print(f"\n[ERFOLG] Video wurde gespeichert unter: {output_file}")
+        # 4. Video Export
+        output_filename = f"{output_name}_{seed}_{scene_profile}.mp4"
+        output_path = os.path.abspath(os.path.join("output", "videos", output_filename))
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        utils.create_video(output_path, fps, resolution)
+        print(f"\n[ERFOLG] Video: {output_path}")
         
     finally:
+        # Cleanup erst am Ende
         utils.cleanup()
         print("Bereinigung der temporären Dateien abgeschlossen.")
 

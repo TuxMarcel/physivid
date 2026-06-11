@@ -8,6 +8,6 @@ def parse_args():
     parser.add_argument("--fps", type=int, default=60, help="Frames per second")
     parser.add_argument("--resolution", type=str, default="1080x1920", help="Resolution (WxH)")
     parser.add_argument("--output_name", type=str, default="output", help="Base name for the output file")
-    parser.add_argument("--scene_profile", type=str, default="ball_pit", choices=["ball_pit", "lava_lamp"], help="Simulation scenario")
+    parser.add_argument("--scene_profile", type=str, default="ball_pit", choices=["ball_pit", "lava_lamp", "dna_helix"], help="Simulation scenario")
 
     return parser.parse_args()
