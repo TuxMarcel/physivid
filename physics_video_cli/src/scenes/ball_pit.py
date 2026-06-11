@@ -68,7 +68,7 @@ class BallPitScene(BaseScene):
         # Pegs unten
         for _ in range(20):
             x = self.rng.uniform(-300, 300)
-            y = self.rng.uniform(-800, +400)
+            y = self.rng.uniform(-810, +400)
             Peg(self.space, self.rng, (x, y), 15)
 
     def _add_wall(self, a, b):
