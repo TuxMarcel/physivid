@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
+.coverage
 
 # Virtual Environment
 venv/
@@ -14,12 +16,10 @@ env/
 .DS_Store
 
 # Project specific
-temp_frames/
-output/videos/
-*.mp4
-*.wav
+temp_video.mp4
+temp_audio.wav
+output/videos/*.mp4
+output/videos/*.wav
 
-# Misc
-.env
-.pytest_cache/
-.coverage
+# Logs
+*.log

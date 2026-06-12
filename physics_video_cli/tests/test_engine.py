@@ -2,72 +2,96 @@ import unittest
 import pymunk
 import os
 import shutil
-from src.engine_world import WorldGenerator
-from src.engine_sim import SimulationEngine
-from src.engine_audio import AudioSynthesizer
+import random
+from core.registry import get, list_all
+import main
+from audio.synthesizer import Synthesizer
 
 class TestEngineDeterminism(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Discover experiments so they are registered
+        main._discover()
+
     def test_world_generator_determinism(self):
         """
-        Verify that WorldGenerator produces identical starting states for the same seed.
+        Verify that setting up the experiment twice with the same seed produces identical starting states.
         """
         seed = 42
         profile = "ball_pit"
         
-        wg1 = WorldGenerator(seed, profile)
-        space1 = wg1.generate()
+        exp_cls = get(profile)
+        exp1 = exp_cls(seed)
+        exp1.setup()
         
-        wg2 = WorldGenerator(seed, profile)
-        space2 = wg2.generate()
+        exp2 = exp_cls(seed)
+        exp2.setup()
         
-        self.assertEqual(len(space1.bodies), len(space2.bodies))
-        self.assertEqual(len(space1.shapes), len(space2.shapes))
+        self.assertEqual(len(exp1.space.bodies), len(exp2.space.bodies))
+        self.assertEqual(len(exp1.space.shapes), len(exp2.space.shapes))
         
-        # Check that starting positions match exactly
-        for b1, b2 in zip(space1.bodies, space2.bodies):
+        for b1, b2 in zip(exp1.space.bodies, exp2.space.bodies):
             self.assertAlmostEqual(b1.position.x, b2.position.x, places=5)
             self.assertAlmostEqual(b1.position.y, b2.position.y, places=5)
             self.assertAlmostEqual(b1.angle, b2.angle, places=5)
 
     def test_simulation_determinism(self):
         """
-        Verify that running the simulation twice with the same seed results in the exact same state.
+        Verify that running the simulation step-by-step results in identical state and audio buffers.
         """
         seed = 99
         profile = "lava_lamp"
-        temp_dir1 = "temp_test_1"
-        temp_dir2 = "temp_test_2"
+        duration = 1.0
+        fps = 10
+        dt = 1.0 / fps
+        num_frames = int(duration * fps)
         
-        os.makedirs(temp_dir1, exist_ok=True)
-        os.makedirs(temp_dir2, exist_ok=True)
+        # Run first simulation
+        exp1 = get(profile)(seed)
+        exp1.setup()
+        synth1 = Synthesizer(44100, seed, duration)
         
-        try:
-            engine1 = SimulationEngine(seed, profile, "640x480", temp_dir1, duration=1.0)
-            engine1.run(duration=1.0, fps=10)
+        def collision_hook1(arbiter, space, data):
+            exp1.handle_collisions(arbiter, synth1.time, synth1)
+        exp1.space.on_collision(post_solve=collision_hook1)
+        
+        for frame in range(num_frames):
+            current_time = frame * dt
+            synth1.time = current_time
+            exp1.pre_step(dt)
+            exp1.space.step(dt)
+            exp1.post_step(dt)
             
-            engine2 = SimulationEngine(seed, profile, "640x480", temp_dir2, duration=1.0)
-            engine2.run(duration=1.0, fps=10)
+        # Run second simulation
+        exp2 = get(profile)(seed)
+        exp2.setup()
+        synth2 = Synthesizer(44100, seed, duration)
+        
+        def collision_hook2(arbiter, space, data):
+            exp2.handle_collisions(arbiter, synth2.time, synth2)
+        exp2.space.on_collision(post_solve=collision_hook2)
+        
+        for frame in range(num_frames):
+            current_time = frame * dt
+            synth2.time = current_time
+            exp2.pre_step(dt)
+            exp2.space.step(dt)
+            exp2.post_step(dt)
             
-            # Verify body positions at the end of simulation
-            for b1, b2 in zip(engine1.space.bodies, engine2.space.bodies):
-                self.assertAlmostEqual(b1.position.x, b2.position.x, places=5)
-                self.assertAlmostEqual(b1.position.y, b2.position.y, places=5)
-                self.assertAlmostEqual(b1.angle, b2.angle, places=5)
-                
-            # Verify that both audio buffers are identical
-            self.assertEqual(engine1.audio.buffer, engine2.audio.buffer)
+        # Verify body positions at the end of simulation
+        for b1, b2 in zip(exp1.space.bodies, exp2.space.bodies):
+            self.assertAlmostEqual(b1.position.x, b2.position.x, places=5)
+            self.assertAlmostEqual(b1.position.y, b2.position.y, places=5)
+            self.assertAlmostEqual(b1.angle, b2.angle, places=5)
             
-        finally:
-            if os.path.exists(temp_dir1):
-                shutil.rmtree(temp_dir1)
-            if os.path.exists(temp_dir2):
-                shutil.rmtree(temp_dir2)
+        # Verify that both audio buffers are identical
+        self.assertEqual(synth1.buffer, synth2.buffer)
 
     def test_audio_sound_mixing(self):
         """
-        Test that AudioSynthesizer successfully mixes sound into the buffer.
+        Test that Synthesizer successfully mixes sound into the buffer.
         """
-        synth = AudioSynthesizer("dummy.wav", duration=1.0, seed=42, sample_rate=1000)
+        synth = Synthesizer(sample_rate=1000, seed=42, duration=1.0)
         self.assertEqual(sum(synth.buffer), 0.0)
         
         # Synthesize a sound at t=0.5
